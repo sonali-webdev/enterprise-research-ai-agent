@@ -1,0 +1,1 @@
+SELECT text, "order" FROM "ResearchQuestion" ORDER BY "order";

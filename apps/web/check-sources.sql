@@ -1,0 +1,1 @@
+SELECT url, title, status FROM "Source" ORDER BY "createdAt" DESC LIMIT 10;

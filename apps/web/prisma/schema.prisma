@@ -1,0 +1,263 @@
+// apps/web/prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum ProjectStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum QuestionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum SourceStatus {
+  PENDING
+  FETCHED
+  FAILED
+}
+
+enum ConfidenceLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EvidenceStance {
+  SUPPORTS
+  CONTRADICTS
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum JobStage {
+  PLANNING
+  SEARCHING
+  EXTRACTING
+  EMBEDDING
+  RETRIEVING
+  ANALYZING
+  DETECTING_CONTRADICTIONS
+  GENERATING_REPORT
+}
+
+model ResearchProject {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  originalQuestion String
+  status           ProjectStatus @default(PENDING)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  questions ResearchQuestion[]
+  sources   Source[]
+  jobs      Job[]
+  report    Report?
+
+  @@index([status])
+  @@index([userId])
+}
+
+model ResearchQuestion {
+  id        String          @id @default(cuid())
+  projectId String
+  project   ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  text      String
+  order     Int
+  status    QuestionStatus  @default(PENDING)
+  createdAt DateTime        @default(now())
+
+  findings Finding[]
+
+  @@index([projectId])
+}
+
+model Source {
+  id             String          @id @default(cuid())
+  projectId      String
+  project        ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url            String
+  title          String?
+  fetchedAt      DateTime?
+  rawContentPath String?
+  status         SourceStatus    @default(PENDING)
+  createdAt      DateTime        @default(now())
+
+  chunks Chunk[]
+
+  @@unique([projectId, url])
+  @@index([projectId])
+}
+
+model Chunk {
+  id         String                      @id @default(cuid())
+  sourceId   String
+  source     Source                      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  content    String
+  chunkIndex Int
+  embedding  Unsupported("vector(384)")?
+
+  evidence Evidence[]
+
+  @@index([sourceId])
+}
+
+model Finding {
+  id               String           @id @default(cuid())
+  questionId       String
+  question         ResearchQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  statement        String
+  category         String
+  confidenceLevel  ConfidenceLevel
+  confidenceReason String
+  createdAt        DateTime         @default(now())
+
+  evidence        Evidence[]
+  contradictionsA Contradiction[] @relation("FindingA")
+  contradictionsB Contradiction[] @relation("FindingB")
+
+  @@index([questionId])
+}
+
+model Evidence {
+  id           String         @id @default(cuid())
+  findingId    String
+  finding      Finding        @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  chunkId      String
+  chunk        Chunk          @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  stance       EvidenceStance
+  excerptStart Int
+  excerptEnd   Int
+  createdAt    DateTime       @default(now())
+
+  @@index([findingId])
+  @@index([chunkId])
+}
+
+model Contradiction {
+  id          String   @id @default(cuid())
+  findingAId  String
+  findingA    Finding  @relation("FindingA", fields: [findingAId], references: [id], onDelete: Cascade)
+  findingBId  String
+  findingB    Finding  @relation("FindingB", fields: [findingBId], references: [id], onDelete: Cascade)
+  explanation String
+  createdAt   DateTime @default(now())
+
+  @@index([findingAId])
+  @@index([findingBId])
+}
+
+model Report {
+  id                   String          @id @default(cuid())
+  projectId            String          @unique
+  project              ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executiveSummary     String
+  methodology          String
+  trends               Json
+  businessImplications Json
+  risks                Json
+  conclusions          Json
+  generatedAt          DateTime        @default(now())
+}
+
+model Job {
+  id        String          @id @default(cuid())
+  projectId String
+  project   ResearchProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status    JobStatus       @default(QUEUED)
+  stage     JobStage?
+  lockedAt  DateTime?
+  lockedBy  String?
+  attempts  Int             @default(0)
+  error     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([status, lockedAt])
+  @@index([projectId])
+}
+
+model User {
+  id               String             @id
+  name             String
+  email            String
+  emailVerified    Boolean            @default(false)
+  image            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  sessions         Session[]
+  accounts         Account[]
+  researchProjects ResearchProject[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
