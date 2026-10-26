@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className={`${newsreader.variable} ${plexSans.variable} font-sans antialiased`}>
         {session && (
-          <div className="flex justify-end items-center gap-4 px-6 py-4 font-sans text-sm text-muted">
+         <div className="print:hidden flex justify-end items-center gap-4 px-6 py-4 font-sans text-sm text-muted">
             <span>{session.user.email}</span>
             <SignOutButton />
           </div>

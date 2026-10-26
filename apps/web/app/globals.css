@@ -18,3 +18,34 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
 }
+
+@page {
+  margin: 18mm;
+}
+
+@media print {
+  /* The app is light-on-dark. Browsers don't print backgrounds, so without
+     this override the text would print as near-white on white paper. */
+  :root {
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+    --color-border: #cccccc;
+    --color-text: #111111;
+    --color-muted: #555555;
+    --color-accent: #7a5a12;
+    --color-danger: #a1432a;
+    --color-confirm: #3d6b3a;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  /* Print each external link's URL after it so a paper copy stays traceable. */
+  .print-urls a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #555555;
+    word-break: break-all;
+  }
+}
