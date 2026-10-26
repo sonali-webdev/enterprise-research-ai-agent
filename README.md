@@ -47,12 +47,14 @@ worker/                Worker process: queue polling and every research stage.
   src/lib/ai/            AIProvider interface and Groq implementation
   src/lib/pipeline/      planner, search, chunker, embeddings, retrieval,
                          findingExtractor, contradictionDetector, reportGenerator
-docker-compose.yml     Postgres 16 + pgvector
+docker-compose.yml     Postgres 16 + pgvector, migrations, web app, worker
+apps/web/Dockerfile    web image
+worker/Dockerfile      worker image (embedding model baked in)
 ```
 
 ## Setup
 
-**Prerequisites:** Node.js 22 or newer, Docker Desktop, a free [Groq](https://console.groq.com) API key, and a free [Tavily](https://app.tavily.com) API key. Free-tier rate limits apply.
+**Prerequisites:** Docker Desktop, a free [Groq](https://console.groq.com) API key, and a free [Tavily](https://app.tavily.com) API key. Free-tier rate limits apply. Node.js 22 or newer is only needed for local development.
 
 **1. Create env files** from the examples:
 
@@ -74,19 +76,37 @@ Copy-Item worker\.env.example worker\.env
 | `apps/web/.env` | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` |
 | `worker/.env` | `DATABASE_URL`, `GROQ_API_KEY`, `TAVILY_API_KEY` |
 
-Postgres is published on host port **5433**, so `DATABASE_URL` uses `localhost:5433`. Generate the auth secret with:
+Generate the auth secret with:
 
 ```
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-**2. Start the database**
+**2. Run the whole stack with Docker**
 
 ```
-docker compose up -d
+docker compose up -d --build
 ```
 
-**3. Web app** (terminal 1)
+This starts Postgres, a one-shot `migrate` service that applies the database migrations and exits, the web app on http://localhost:3000, and the worker. The first build downloads base images and the ~90 MB embedding model, so it can take a while. Later builds reuse cached layers.
+
+Check it with `docker compose ps -a`: `migrate` should show `Exited (0)`, and `web`, `worker` and `postgres` should be `Up`. Follow the worker with `docker compose logs -f worker`.
+
+Open http://localhost:3000, create an account, and click **New research**.
+
+Stop everything with `docker compose down`. Never add `-v` unless you want to delete the database.
+
+Inside the containers, Compose overrides `DATABASE_URL` to point at the `postgres` service. The `localhost:5433` value in the env files is used by the Prisma CLI and local development on your machine.
+
+**Local development (web app and worker outside Docker)**
+
+Start only the database:
+
+```
+docker compose up -d postgres
+```
+
+Web app (terminal 1):
 
 ```
 cd apps/web
@@ -96,7 +116,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-**4. Worker** (terminal 2)
+Worker (terminal 2):
 
 ```
 cd worker
@@ -105,9 +125,7 @@ npx prisma generate
 npm start
 ```
 
-The first embedding run downloads the ~90 MB embedding model, then caches it.
-
-**5. Use it:** open http://localhost:3000, create an account, click **New research**. Both the web app and the worker must be running.
+Don't run both modes at once. The web container and `npm run dev` both use port 3000, and two workers would compete for the same job queue.
 
 ## Working on the schema
 
@@ -131,4 +149,6 @@ The first embedding run downloads the ~90 MB embedding model, then caches it.
 - Finding categories are free-form strings, not a fixed set.
 - The schema file is duplicated between `apps/web` and `worker`. npm workspaces would remove that.
 - Auth is email and password only: no email verification, password reset, or rate limiting.
-- Not deployed yet. It currently runs locally, with only Postgres in Docker.
+- Not deployed publicly. The full stack runs locally with Docker Compose.
+
+- **Docker build fails with a DNS or "failed to resolve source metadata" error.** Docker could not reach the image registry. Check your connection, restart Docker Desktop, and retry.
