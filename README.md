@@ -11,15 +11,15 @@ Question → Planner → Search → Source collection → Chunk + embed (pgvecto
         → Retrieve evidence → Extract findings → Detect contradictions → Report
 ```
 
-| Stage | What it does |
-|---|---|
-| Planner | Breaks the question into 3-6 self-contained sub-questions, returned as schema-validated JSON. |
-| Search | Tavily web search, 5 results per sub-question. Only real search results become sources. |
-| Chunk + embed | Result text is split into ~500-character chunks and embedded locally with all-MiniLM-L6-v2 (384 dimensions). Vectors are stored in Postgres with pgvector. |
-| Retrieval | Top 8 chunks per sub-question by cosine distance. Chunks beyond a relevance cutoff are discarded, so a question with no relevant evidence yields no findings instead of a stretched one. |
-| Findings | The model sees numbered excerpts and cites them by number. Citations are resolved against the chunks actually retrieved, and a finding with no valid citation is dropped. |
-| Contradictions | One batch pass over all findings in a project, reporting pairs that cannot both be true. |
-| Report | Executive summary, methodology, trends, business implications, risks and conclusions. Each statement cites finding numbers, which are resolved to real finding IDs before saving. |
+| Stage          | What it does                                                                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Planner        | Breaks the question into 3-6 self-contained sub-questions, returned as schema-validated JSON.                                                                                            |
+| Search         | Tavily web search, 5 results per sub-question. Only real search results become sources.                                                                                                  |
+| Chunk + embed  | Result text is split into ~500-character chunks and embedded locally with all-MiniLM-L6-v2 (384 dimensions). Vectors are stored in Postgres with pgvector.                               |
+| Retrieval      | Top 8 chunks per sub-question by cosine distance. Chunks beyond a relevance cutoff are discarded, so a question with no relevant evidence yields no findings instead of a stretched one. |
+| Findings       | The model sees numbered excerpts and cites them by number. Citations are resolved against the chunks actually retrieved, and a finding with no valid citation is dropped.                |
+| Contradictions | One batch pass over all findings in a project, reporting pairs that cannot both be true.                                                                                                 |
+| Report         | Executive summary, methodology, trends, business implications, risks and conclusions. Each statement cites finding numbers, which are resolved to real finding IDs before saving.        |
 
 **Traceability:** Conclusion → Finding → Evidence → Chunk → Source → URL. Findings, evidence, chunks and sources are linked by foreign keys, so evidence pointing at a nonexistent source cannot be stored. The report's per-statement finding references are stored as JSON and validated in code, not by a foreign key.
 
@@ -28,6 +28,8 @@ Question → Planner → Search → Source collection → Chunk + embed (pgvecto
 **Job queue:** the web app inserts a `Job` row. The worker claims jobs with `SELECT ... FOR UPDATE SKIP LOCKED`. A job with no progress for 10 minutes is marked failed.
 
 **Privacy:** every project belongs to a user. Project pages and the status endpoint return 404 for anyone else.
+
+**Export:** each report can be downloaded as Markdown, or printed or saved as PDF from the browser. The print stylesheet hides navigation, switches to dark-on-white, and prints each link's URL.
 
 ## Stack
 
@@ -70,11 +72,11 @@ Copy-Item apps\web\.env.example apps\web\.env
 Copy-Item worker\.env.example worker\.env
 ```
 
-| File | Values to set |
-|---|---|
-| `.env` | Postgres user, password and database name. The defaults work for local dev. |
-| `apps/web/.env` | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` |
-| `worker/.env` | `DATABASE_URL`, `GROQ_API_KEY`, `TAVILY_API_KEY` |
+| File            | Values to set                                                               |
+| --------------- | --------------------------------------------------------------------------- |
+| `.env`          | Postgres user, password and database name. The defaults work for local dev. |
+| `apps/web/.env` | `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`                     |
+| `worker/.env`   | `DATABASE_URL`, `GROQ_API_KEY`, `TAVILY_API_KEY`                            |
 
 Generate the auth secret with:
 
